@@ -1,0 +1,393 @@
+libvirt releases
+================
+
+# v3.2.0 (2017-04-02)
+
+  * New features
+
+    - The virt-host-validate tool now supports bhyve hypervisor
+
+    - Introduce NVDIMM memory model
+        NVDIMM is new type of memory introduced into QEMU 2.6. The idea is that
+        we have a non-volatile memory module that keeps the data persistent
+        across domain reboots and offers much faster data accesses. However,
+        due to a bug in QEMU, this feature is not enabled for QEMUs older than
+        2.9.0.
+
+    - qemu: Introduce support for generic PCIe Root Ports
+        For new controllers, a generic device (pcie-root-port) will be used by
+        default instead of the Intel-specific device (ioh3420), provided the
+        QEMU binary supports it.
+
+    - qemu: Add support for checking guest CPU ABI compatibility
+        When migrating a domain to a different host, restoring a domain from a
+        file or reverting a snapshot libvirt will make sure the guest CPU QEMU
+        presents to the guest OS exactly matches the one provided on the source
+        host (or before the domain's state was saved). This enhanced check may
+        also be requested when starting a new domain to ensure the virtual CPU
+        exactly matches the one specified in the XML.
+
+    - qemu: Add support to migrate using TLS
+        Add the ability to migrate QEMU guests using TLS via a new flag
+        VIR_MIGRATE_TLS or virsh migrate '--tls' option. Requires using at
+        least QEMU 2.9.0 in order to work properly.
+
+    - qemu: add mediated devices framework support
+        Recent kernel version introduced new mediated device framework, so
+        provide an initial support of this framework for libvirt, mainly by
+        introducing a new host device type in the XML.
+
+    - qemu: Add support for setting TSC frequency
+        Setting TSC frequency is required to enable migration for domains with
+        'invtsc' CPU feature turned on.
+
+    - Add support for block device threshold event
+        When using thin provisioning, management tools need to resize the disk
+        in certain cases. To avoid having them to poll disk usage this version
+        introduces an event which will be fired when a given offset of the
+        storage is written by the hypervisor. Together with the API it allows
+        registering thresholds for given storage backing volumes and this event
+        will then notify management if the threshold is exceeded. Currently
+        only the qemu driver supports this.
+
+    - bhyve: Add support for UEFI boot ROM, VNC, and USB tablet
+        The bhyve driver now supports booting using the UEFI boot ROM, so
+        non-FreeBSD guests that support UEFI could be booted without using an
+        external boot loader like grub-bhyve. Video is also supported now,
+        allowing to connect to guests via VNC and use an USB tablet as an input
+        device. Please refer to the driver page for domain XML examples.
+
+  * Improvements
+
+    - qemu: Detect host CPU model by asking QEMU on x86_64
+        Previously, libvirt detected the host CPU model using CPUID
+        instruction, which caused libvirt to detect a lot of CPU features that
+        are not supported by QEMU/KVM. Asking QEMU makes sure we don't start it
+        with unsupported features.
+
+    - perf: Add more perf statistics
+        Add support to get the count of cpu clock time, task clock time, page
+        faults, context switches, cpu migrations, minor page faults, major page
+        faults, alignment faults, emulation faults by applications running on
+        the platform.
+
+    - Write hyperv crash information into vm log
+        qemu's implementation of the hyperv panic notifier now reports
+        information about the crash from the guest os. Starting with this
+        version, libvirt logs the information to the vm log file for possible
+        debugging.
+
+  * Bug fixes
+
+    - QEMU: Use adaptive timeout for connecting to monitor
+        When starting qemu, libvirt waits for qemu to create the monitor socket
+        which libvirt connects to. Historically, there was sharp 30 second
+        timeout after which the qemu process was killed. This approach is
+        suboptimal as in some scenarios with huge amounts of guest RAM it can
+        take a minute or more for kernel to allocate and zero out pages for
+        qemu. The timeout is now flexible and computed by libvirt at domain
+        startup.
+
+    - Overwrite (clear) 2 KB instead of just 512 bytes when initializing
+      logical device
+
+    - Describe the logical backend requirements better for pool-create-as
+
+# v3.1.0 (2017-03-03)
+
+  * New features
+
+    - storage: Add Virtuozzo storage backend storage pool
+        Add new storage backend to support pool and volume management within
+        the Virtuozzo Storage environment. Virtuozzo Storage is a highly
+        available distributed software defined storage with built-in
+        replication and disaster recovery.
+
+    - qemu: Add support for memory backing with file source
+        Add support in numa topology for file source inside memory backing
+        (hugepages are not needed) Three new elements <source/>,<access/> and
+        <allocation/> were added to <memoryBacking/> element. Also new
+        configuration parameter memory_backing_dir was added to qemu.conf.
+
+    - network: make openvswitch call timeout configurable
+        Adding the ability to specify the timeout value in seconds for
+        openvswitch calls in the libvirtd configuration file.
+
+    - bhyve: add e1000 NIC support
+        Add support for e1000 NIC. Previously, the only available option was
+        virtio-net.
+
+    - libxl: add tunneled migration support
+        Add tunneled migration to libxl driver, which is always capable of
+        strong encryption and doesn't require any extra network connection
+        other than what's required for remote access of libvirtd.
+
+    - qemu: add rendernode argument
+        Add a new attribute 'rendernode' to <gl> spice element.
+
+    - nodedev: add drm capability
+        Add a new 'drm' capability for Direct Rendering Manager (DRM) devices,
+        providing device type information.
+
+    - Add API for individual/specific vCPU hotplug
+        The new API allows selecting specific vCPUs to be added/removed from
+        the VM. The existing APIs allowed only adding/removing from the end
+        which did not play well with NUMA.
+
+  * Improvements
+
+    - virsh: pool-list: allow both --uuid and --name in one command
+        Adjust the virsh-pool command to support the --uuid and/or --name
+        options in order to print just the --name and/or --uuid of pools.
+
+    - Introduce MTU to domain <interface/> and <network>
+        Allow setting MTU size for some types of domain interface and network.
+
+    - libxl: improve support for <timer> configurations
+        Add support for multiple timers. Extend the tsc timer to support the
+        emulate mode. Improve conversion of timer XML to/from xl.cfg.
+
+    - storage: modularize the storage driver
+        Split up the storage driver backends into loadable modules so that
+        binary distributions don't have to compromise on shipping the storage
+        driver with all backends which may pull in too many dependencies.
+
+  * Bug fixes
+
+    - nodedev: Fabric name must not be required for fc_host capability
+        fabric_name is one of many fc_host attributes in Linux that is optional
+        and left to the low-level driver to decide if it is implemented. For
+        example the zfcp device driver does not provide a fabric name for an
+        fcp host. The requirement for the existence of a fabric name has been
+        removed by making it optional.
+
+    - bhyve: change address allocation schema for SATA disks
+        Previously, the bhyve driver assigned PCI addresses to SATA disks
+        directly rather than assigning that to a controller and using SATA
+        addresses for disks. It was implemented this way because bhyve has no
+        notion of an explicit SATA controller. However, as this doesn't match
+        libvirt's understanding of disk addresses, the bhyve driver was changed
+        to follow the common schema and have PCI addresses for SATA controllers
+        and SATA addresses for disks. If you're having issues because of this,
+        it's recommended to edit the domain's XML and remove <address
+        type='pci'> from the <disk> elements with <target bus='sata'/> and let
+        libvirt regenerate it properly.
+
+    - libxl: maximum memory fixes
+        Fix reporting of domain maximum memory. Fix setting dom0 maximum
+        memory.
+
+    - libxl: fix disk detach when <driver> not specified
+
+    - libxl: fix dom0 autoballooning with Xen 4.8
+
+    - qemu: Allow empty script path to <interface/>
+        Historically, this was always allowed. Unfortunately, due to some
+        rework done for 1.3.2 release a bug was dragged in which suddenly stop
+        allowing domain with such configuration to start.
+
+# v3.0.0 (2017-01-17)
+
+  * New features
+
+    - Domain events for metadata content changes
+        The domain events framework has a new event ID that can be used to get
+        notifications when domain metadata content changes.
+
+    - Event notifications for the secret object
+        The secret object now supports event notifications, covering lifcycle
+        changes and secret value changes.
+
+    - New localPtr attribute for "ip" element in network XML
+
+    - qemu: Support QEMU group I/O throttling
+        Add the capability to allow group I/O throttling via a new domain
+        <disk> <iotune> subelement "group_name" to allow sharing I/O throttling
+        quota between multiple drives.
+
+    - nss: Introduce libvirt_guest
+        New libvirt_guest nss module that translates libvirt guest names into
+        IP addresses.
+
+    - daemon: Add support for runtime logging settings adjustment
+        Logging-related settings like log outputs and filters can now be
+        adjusted during runtime using the admin interface without the necessity
+        of the daemon's restart.
+
+    - storage: Add virStorageVolInfoFlags API
+        Add the API to support using the VIR_STORAGE_VOL_GET_PHYSICAL flag in
+        order to return the host physical size in bytes of the image container
+        in the allocation field of the _virStorageVolInfo structure. The
+        --physical flag has been added to the virsh vol-info command to access
+        the data.
+
+    - libxl: Implement virDomainGetMaxVcpus API
+
+    - storage: Add overwrite flag checking for logical pool
+        Add support for the OVERWRITE flags for the logical storage backend
+        including checking for existing data on the target volumes when
+        building a new logical pool on target volume(s).
+
+    - qemu: Add support for guest CPU configuration on s390(x)
+
+  * Improvements
+
+    - perf: Add more perf statistics
+        Add support to get the count of branch instructions executed, branch
+        misses, bus cycles, stalled frontend cpu cycles, stalled backend cpu
+        cycles, and ref cpu cycles by applications running on the platform.
+
+    - conf: Display <physical> for volume xml
+        Add a display of the <physical> size of a disk volume in the output of
+        the volume XML.
+
+    - qemu: Use virtio-pci by default for aarch64 mach-virt guests
+        virtio-pci provides several advantages over virtio-mmio, such as the
+        ability to hotplug devices and improved performance. While opting in to
+        virtio-pci has been possible for a while, newly-defined guests will now
+        use it automatically.
+
+    - vbox: remove support for VirtualBox 3.x and older
+        Those old VirtualBox versions have been unsupported by upstream for a
+        long time and the API of 4.0 and newer has diverged enough to require
+        code abstractions to handle differences. Removing support for those old
+        versions drops lots of code from the driver and simplifies the logic to
+        ease implementation of new features going forward.
+
+    - virsh: pool-info: introduce option --bytes
+        Add option --bytes to virsh pool-info in order ti allow display of
+        units in bytes rather than default of human readable output.
+
+    - scsi: Add parent wwnn/wwpn or fabric capability for createVport
+        Improve the algorithm searching for the parent scsi_host device for
+        vHBA/NPIV scsi_host creation. Rather than supplying the "parent" by
+        name, it's now possible to define the parent by it's wwnn/wwpn or
+        fabric_wwn in the node device create XML or the storage pool XML.
+
+    - qemu: aggregate pcie-root-ports onto multiple functions of a slot
+        When pcie-root-ports are added to pcie-root in order to provide a place
+        to connect PCI Express endpoint devices, libvirt now aggregates
+        multiple root ports together onto the same slot (up to 8 per slot) in
+        order to conserve slots. Using this method, it's possible to connect
+        more than 200 endpoint devices to a guest that uses PCIe without
+        requiring setup of any PCIe switches.
+
+  * Bug fixes
+
+    - lxc: fix accidental killing of containers during libvirtd restart
+        The libvirt_lxc process was previously not moved into the container
+        scope. As a result, if systemd reloads its config after a container is
+        started, when libvirtd is later restarted it will accidentally kill the
+        containers.
+
+    - qemu: Correct GetBlockInfo values
+        For an active domain, correct the physical value provided for a raw
+        sparse file backed storage and the allocation value provided for a
+        qcow2 file backed storage that hasn't yet been opened on the domain.
+
+    - qemu: Make virtio console usable on ppc64 guests
+        The chardev detection code has been improved and can now handle this
+        configuration properly.
+
+    - qemu: Enable mount namespace
+        To avoid funny races with udev relabelling devices under our hands and
+        to enhance security, libvirt now spawns each qemu process with its own
+        /dev.
+
+    - storage: Fix implementation of no-overwrite for file system backend
+        Fix file system storage backend implementation of the OVERWRITE flags
+        to be consistent between code and documentation. Add checks to ensure
+        that when building a new file system on a target volume that there is
+        not something already on the disk in a format that libvirt can
+        recognize.
+
+    - qemu: Create hugepage path on per domain basis
+        Historically, all hugepage enabled domains shared the same path under
+        hugetlbfs. This left libvirt unable to correctly set security labels on
+        it. With this release, however, each domain is put into a separate path
+        which is also correctly labeled.
+
+    - conf: Reject domains with duplicate drive addresses
+        Reject duplicate drive addresses for disks and hostdevs at domain
+        definition.
+
+    - libxl: reverse defaults on HVM net device attach
+        Fixes network interface attach for HVM domains when no model is
+        specified. Emulated hotplug isn't yet supported and hence we should
+        default to the general working scenario.
+
+    - libxl: always enable pae for x86_64 HVM
+        By default pae is disabled in libxl. Without an explicit <pae/> setting
+        in the domain <features> configuration, an x86_64 HVM domain would be
+        get an i686 environment. pae should always be enabled for x86_64 HVM
+        domains.
+
+    - qemu: Fix XML dump of autogenerated websocket
+        As a result autogenerated websocket port is regenerated on domain
+        restore, migration and such as it should be.
+
+# v2.5.0 (2016-12-04)
+
+  * New features
+
+    - shmem: Add support for additional models
+        The shmem device can now utilize QEMU's ivshmem-plain and
+        ivshmem-doorbell, more modern versions of ivshmem.
+
+    - vbox: Add VirtualBox 5.1 support
+
+    - libssh: New transport
+        The new libssh transport allows one to connect to a running libvirtd
+        via SSH, using the libssh library; for example:
+        qemu+libssh://server/system.
+
+    - vhost-scsi: Add support scsi_host hostdev passthrough
+        Add the capability to pass through a scsi_host HBA and the associated
+        LUNs to the guest.
+
+    - qemu: Users can now enable debug logging for native gluster volumes in
+      qemu using the "gluster_debug_level" option in qemu.conf
+
+    - memory hotplug: Slot numbers for memory devices are now automatically
+      allocated and thus persistent. In addition slot numbers can be specified
+      without providing a base address, which simplifies user configuration
+
+    - qemu: Express devices will be placed on PCIe bus by default
+        For machine types that use a PCI Express root bus (e.g. x86_64/Q35 and
+        aarch64/virt), any unaddressed PCI device that is an Express device
+        (all virtio-1.0 devices, e1000e, nec-xhci, vfio assigned devices) will
+        be placed on an Express controller (i.e. a pcie-root-port) instead of a
+        legacy PCI controller (i.e. pci-bridge) with the root ports added as
+        needed.
+
+  * Improvements
+
+    - docs: Better documentation for migration APIs and flags
+
+    - vbox: Address thread safety issues
+
+    - virsh: Add support for passing an alternative persistent XML to migrate
+      command
+
+    - vhostuser: Allow hotplug of multiqueue devices
+
+    - NEWS: Switch to an improved format
+        List user-visible changes instead of single commits for a better
+        high-level overview of differences between libvirt releases.
+
+    - website: Modernize layout and branding
+        The libvirt website looked very cluttered and outdated; it has now been
+        completely overhauled, resulting in a design that's better organized
+        and more pleasant to look at.
+
+  * Bug fixes
+
+    - vz: Fix migration in P2P mode
+
+    - Forbid newline character in names of some libvirt objects
+
+    - Fix compilation on macOS
+
+==============================================================================
+Older libvirt releases didn't have proper release notes: if you are interested
+in changes between them, you should check out ChangeLog* and docs/news-*.html.
